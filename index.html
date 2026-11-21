@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speed Typer: Dynamic Multiplayer</title>
+    <style>
+        /* --- CSS VARIABLES --- */
+        :root {
+            --primary: #00f2ff;       
+            --primary-bg: rgba(0, 242, 255, 0.2); 
+            --wrong: #ff4757;         
+            --wrong-bg: rgba(255, 71, 87, 0.4); 
+            --bg: #1a1a2e;            
+            --container: #16213e;     
+            --text: #e0e0e0;          
+            --input-bg: rgba(15, 52, 96, 0.8);      
+            --border-color: #333;     
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            transition: background 0.4s ease, color 0.4s ease;
+            overflow-x: hidden;
+            box-sizing: border-box;
+        }
+
+        /* HAMBURGER & SIDE MENU */
+        .hamburger {
+            position: absolute; top: 20px; left: 20px; font-size: 2rem; cursor: pointer;
+            z-index: 100; color: var(--primary); background: var(--container);
+            padding: 5px 15px; border-radius: 8px; border: 1px solid var(--border-color);
+            transition: 0.3s;
+        }
+        .hamburger:hover { background: var(--input-bg); }
+
+        .side-menu {
+            position: fixed; top: 0; left: -350px; width: 300px; height: 100%;
+            background-color: var(--container); border-right: 2px solid var(--primary);
+            transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 99;
+            padding: 80px 20px 20px; box-shadow: 10px 0 30px rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+            overflow-y: auto;
+        }
+        .side-menu.open { left: 0; }
+
+        .menu-section {
+            background: var(--input-bg); padding: 20px; border-radius: 10px;
+            margin-bottom: 20px; text-align: center; border: 1px solid var(--border-color);
+        }
+        
+        .menu-section input {
+            width: 80%; padding: 10px; margin: 10px 0; border-radius: 5px;
+            border: 1px solid var(--primary); background: var(--bg); color: var(--text);
+            text-align: center; font-size: 1.2rem; font-weight: bold;
+        }
+
+        .btn {
+            background: var(--primary); color: #000; border: none; padding: 10px 20px;
+            font-weight: bold; border-radius: 5px; cursor: pointer; width: 100%;
+            font-size: 1.1rem; transition: 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.4); }
+
+        /* --- SINGLE PLAYER VIEW --- */
+        .game-container {
+            background-color: var(--container); padding: 35px; border-radius: 20px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.6); width: 95%; max-width: 1100px;
+            text-align: center; position: relative; border: 1px solid var(--border-color);
+            transition: all 0.4s ease; backdrop-filter: blur(10px); margin-top: 60px;
+            display: block; 
+        }
+
+        .controls-row {
+            display: flex; justify-content: flex-end; align-items: center;
+            margin-bottom: 25px; border-bottom: 1px solid var(--border-color); padding-bottom: 15px;
+        }
+        
+        select {
+            padding: 10px 15px; border-radius: 8px; border: 2px solid var(--border-color);
+            background: var(--input-bg); color: var(--text); cursor: pointer; outline: none;
+            font-weight: bold; min-width: 220px; transition: all 0.3s ease;
+        }
+        select:focus, select:hover { border-color: var(--primary); box-shadow: 0 0 12px var(--primary-bg); }
+
+        .stats-bar {
+            display: flex; justify-content: space-between; font-size: 1.6rem;
+            margin-bottom: 20px; font-weight: 800; color: var(--primary);
+        }
+
+        .quote-display {
+            font-family: 'Courier New', Courier, monospace; font-size: 1.25rem; line-height: 1.8;
+            margin-bottom: 20px; text-align: left; background: var(--input-bg); padding: 30px;
+            border-radius: 12px; height: 320px; overflow-y: auto; user-select: none;
+            border: 1px solid var(--border-color); white-space: pre-wrap; cursor: text; scroll-behavior: smooth;
+        }
+        .quote-display::-webkit-scrollbar { width: 8px; }
+        .quote-display::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+
+        .correct { color: var(--primary); background-color: var(--primary-bg); border-radius: 3px; }
+        .incorrect { color: var(--wrong); background-color: var(--wrong-bg); text-decoration: underline; border-radius: 3px; }
+        
+        .active-char { border-left: 2px solid var(--primary); animation: blink 1s infinite; }
+        @keyframes blink { 0%, 100% { border-color: var(--primary); } 50% { border-color: transparent; } }
+
+        .hidden-input {
+            position: absolute; 
+            top: 0; left: -9999px; 
+            width: 1px; height: 1px; 
+            opacity: 0; 
+        }
+
+        /* --- MULTIPLAYER QUADRANTS VIEW --- */
+        .quadrants-container {
+            display: none; 
+            height: auto; 
+            max-height: calc(100vh - 250px); 
+            width: 95vw;
+            gap: 15px;
+            box-sizing: border-box;
+            margin-top: 50px;
+            padding-bottom: 10px;
+            align-items: start; 
+            align-content: start;
+            overflow-y: auto;
+        }
+
+        .grid-1 { grid-template-columns: 1fr; grid-template-rows: auto; }
+        .grid-2 { grid-template-columns: 1fr 1fr; grid-template-rows: auto; }
+        .grid-3 { grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; }
+        .grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; }
+
+        .grid-3 .quadrant:nth-child(3) {
+            grid-column: 1 / span 2;
+            width: calc(50% - 7.5px); 
+            justify-self: center;
+        }
+
+        .quadrant {
+            background: var(--container); border-radius: 15px; border: 2px solid var(--border-color);
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-start; 
+            position: relative; overflow: hidden; backdrop-filter: blur(10px); padding: 15px 20px; height: auto; 
+        }
+
+        .quad-header { display: flex; justify-content: space-between; width: 100%; align-items: center; margin-bottom: 10px; }
+        .quad-name { font-size: 1.5rem; font-weight: bold; color: var(--text); }
+        .quad-wpm { font-size: 2rem; color: var(--primary); font-weight: bold; }
+        
+        .progress-track { width: 100%; height: 15px; background: var(--input-bg); border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); margin-bottom: 15px; }
+        .progress-fill { height: 100%; width: 0%; background: var(--primary); transition: width 0.15s linear; box-shadow: 0 0 10px var(--primary); }
+
+        .mini-quote-display {
+            width: 100%; background: rgba(0,0,0,0.3); border-radius: 8px; height: auto;
+            border: 1px solid var(--border-color); font-family: 'Courier New', Courier, monospace;
+            font-size: 0.95rem; line-height: 1.5; padding: 12px; text-align: left;
+            overflow-y: auto; max-height: 250px; white-space: pre-wrap; display: none; box-sizing: border-box;
+            scroll-behavior: smooth;
+        }
+        
+        .mini-quote-display::-webkit-scrollbar { width: 6px; }
+        .mini-quote-display::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+
+        .ready-btn { margin-top: auto; margin-bottom: 10px; background: #f1c40f; padding: 10px 30px; font-size: 1.2rem; width: auto; }
+        .ready-btn:disabled { background: #555; color: #aaa; cursor: not-allowed; transform: none; box-shadow: none; }
+        .ready-badge { margin-top: auto; margin-bottom: 10px; color: #2ecc71; font-weight: bold; font-size: 1.5rem; letter-spacing: 2px; }
+
+        /* MULTIPLAYER CENTRAL DASHBOARD */
+        .center-typing-area {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            width: 85%; max-width: 1200px; height: auto; max-height: 38vh; 
+            background: rgba(15, 23, 42, 0.98); padding: 20px 30px;
+            border-radius: 15px; box-shadow: 0 10px 50px rgba(0,0,0,0.9); border: 2px solid var(--primary);
+            z-index: 40; backdrop-filter: blur(15px); display: none; flex-direction: column; cursor: text;
+        }
+
+        .mp-dashboard-header { width: 100%; margin-bottom: 10px; }
+        .mp-header-stats { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        
+        .time-bar-track { width: 100%; height: 8px; background: rgba(0,0,0,0.5); border-radius: 4px; overflow: hidden; }
+        .time-bar-fill { height: 100%; width: 100%; background: var(--primary); transition: width 1s linear; }
+
+        #mp-quoteDisplay { 
+            height: auto; font-size: 1.15rem; padding: 15px; margin-bottom: 0; 
+            overflow-y: auto; scroll-behavior: smooth;
+        }
+
+        /* OVERLAYS */
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center;
+            z-index: 50; flex-direction: column; color: white; display: none; backdrop-filter: blur(5px);
+        }
+        .countdown-text { font-size: 10rem; color: var(--primary); font-weight: bold; text-shadow: 0 0 20px var(--primary); }
+    </style>
+</head>
+<body>
+
+    <!-- Hamburger & Side Menu -->
+    <div class="hamburger" onclick="toggleMenu()">☰</div>
+    <div class="side-menu" id="sideMenu">
+        <h2 style="color: var(--primary); text-align: center; margin-top: 0;">Multiplayer Race</h2>
+        <p style="text-align: center; color: #aaa; margin-bottom: 20px;">Up to 4 Players</p>
+        
+        <div class="menu-section">
+            <h3 style="margin-top: 0;">Your Profile</h3>
+            <input type="text" id="playerNameInput" placeholder="Enter Custom Name" maxlength="15">
+        </div>
+
+        <div class="menu-section">
+            <h3>Host a Game</h3>
+            <button class="btn" onclick="hostGame()">Create Room</button>
+            <div id="hostInfo" style="display:none; margin-top:15px;">
+                <p id="roomLabel" style="margin:5px 0; color: #ccc;">Your Room ID:</p>
+                <h2 style="color: var(--primary); letter-spacing: 5px; font-size: 2rem; margin: 0;" id="displayRoomId">----</h2>
+            </div>
+        </div>
+
+        <div class="menu-section">
+            <h3>Join a Game</h3>
+            <input type="text" id="joinRoomId" placeholder="Enter 4-Digit ID" maxlength="4">
+            <button class="btn" onclick="joinGame()" style="background: #2ecc71;">Join Room</button>
+        </div>
+        
+        <button class="btn" onclick="leaveMultiplayer()" id="leaveMpBtn" style="background: var(--wrong); margin-top: 20px; display: none;">Leave Multiplayer</button>
+    </div>
+
+    <!-- 1. SINGLE PLAYER VIEW -->
+    <div class="game-container" id="singlePlayerView">
+        <div class="controls-row">
+             <div>
+                <label style="font-size: 0.9rem; color:var(--text); opacity:0.7; display:block; margin-bottom:5px;">🎨 Visual Theme</label>
+                <select id="themeSelect" onchange="applyTheme(this.value)">
+                    <option value="neon">Neon</option>
+                    <option value="classic">Classic</option>
+                    <option value="matrix">Matrix</option>
+                    <option value="candy">Cotton Candy</option>
+                    <option value="dracula">Dracula</option>
+                    <option value="oceanic">Oceanic</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="stats-bar">
+            <div>⏱️ <span id="sp-timer">60</span>s</div>
+            <div>WPM: <span id="sp-wpm">0</span></div>
+        </div>
+
+        <div class="quote-display" id="sp-quoteDisplay" onclick="document.getElementById('sp-input-field').focus()"></div>
+        <textarea class="hidden-input" id="sp-input-field" autofocus onpaste="return false;" autocomplete="off" spellcheck="false"></textarea>
+        
+        <button class="btn" style="width: auto; padding: 12px 40px; margin-top: 15px; background: var(--wrong);" onclick="resetSingleGame()">↻ Reset Game</button>
+        <p style="margin-top:20px; font-size: 0.95rem; opacity: 0.6;">Type as much as you can in 60 seconds!</p>
+    </div>
+
+    <!-- 2. MULTIPLAYER QUADRANTS VIEW -->
+    <div class="quadrants-container grid-1" id="multiplayerView">
+        <!-- Quadrants generated dynamically -->
+    </div>
+
+    <!-- Central Typing Area (Dashboard) -->
+    <div class="center-typing-area" id="mpTypingArea" onclick="document.getElementById('mp-input-field').focus()">
+        
+        <div class="mp-dashboard-header">
+            <div class="mp-header-stats">
+                <div style="font-size: 1.2rem; font-weight: bold; color: var(--primary);">Live Race</div>
+                <div style="font-size: 1.4rem; font-weight: bold;">⏱️ <span id="mp-live-timer-text">60s</span></div>
+            </div>
+            <div class="time-bar-track">
+                <div class="time-bar-fill" id="mp-time-bar"></div>
+            </div>
+        </div>
+
+        <div class="quote-display" id="mp-quoteDisplay"></div>
+        <textarea class="hidden-input" id="mp-input-field" onpaste="return false;" autocomplete="off" spellcheck="false"></textarea>
+    </div>
+
+    <!-- OVERLAYS -->
+    <div class="overlay" id="sp-end-screen">
+        <h1 style="font-size: 4rem; margin-bottom: 10px;">Time's Up!</h1>
+        <h2 style="color: var(--primary); font-size: 2.5rem; margin: 10px 0;">Final WPM: <span id="sp-final-wpm">0</span></h2>
+        <p style="font-size: 1.5rem; margin: 10px 0;">Accuracy: <span id="sp-final-acc">0</span>%</p>
+        <p style="font-size: 1.1rem; color: #aaa; margin: 0;">(Mistakes Made: <span id="sp-total-mistakes">0</span>)</p>
+        <button class="btn" style="width: auto; padding: 15px 50px; margin-top: 30px;" onclick="resetSingleGame()">Play Again</button>
+    </div>
+
+    <div class="overlay" id="mp-countdownOverlay">
+        <div class="countdown-text" id="mp-countdownTimer">3</div>
+        <h2 style="font-size: 2rem;">Get Ready...</h2>
+    </div>
+
+    <div class="overlay" id="mp-gameOverOverlay">
+        <h1 style="font-size: 4rem;">Race Finished!</h1>
+        <h2 id="mp-winnerText" style="color: var(--primary); font-size: 3rem; margin: 20px 0;"></h2>
+        <button class="btn" onclick="leaveMultiplayer()" style="width: auto; padding: 15px 40px; background: var(--wrong);">Leave Room</button>
+    </div>
+
+    <script>
+        // --- GLOBAL DATA & THEMES ---
+        const quotes = [
+            "The dawn broke over the horizon, painting the sky in a kaleidoscope of violet, crimson, and gold. As the first rays of sunlight touched the surface of the lake, the mist began to rise, swirling like ghostly dancers before dissipating into the cool morning air.",
+            "A black hole is a region of spacetime where gravity is so strong that nothing, not even particles or electromagnetic radiation such as light, can escape from it. The boundary of no escape is called the event horizon.",
+            "It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife. However little known the feelings or views of such a man may be on his first entering a neighbourhood.",
+            "In a spellbound forest where the trees whispered secrets to the wind, a small mouse scurried through the underbrush. He was searching for food, specifically the delicious hazelnuts that fell from the ancient oak. Suddenly, a massive shadow engulfed him.",
+            "The atom is the basic unit of matter and the defining structure of elements. The term atom comes from the Greek word for indivisible, because it was once thought that atoms were the smallest things in the universe and could not be divided.",
+            "Two roads diverged in a yellow wood, and sorry I could not travel both and be one traveler, long I stood and looked down one as far as I could to where it bent in the undergrowth; then took the other, as just as fair.",
+            "In Q3 2023, the company revenue grew by 14.5 percent, reaching 2.45 billion. However, net income fell 3.2 percent year over year to 450 million. The CEO stated, 'If we cut overhead by 10 to 15 percent, we can expect an EPS of 1.85 next quarter!'",
+            "The new datacenter houses 4500 servers across 12 distinct zones. Each server is equipped with 64 cores and 256 gigabytes of RAM. The total capacity exceeds 10 petabytes of storage, ensuring a 99.99 percent uptime for all 85 enterprise clients.",
+            "Ingredients for Recipe 042 B: 2.5 cups of flour or approx 300g, 0.25 tsp of baking soda, 0.75 lbs of unsalted butter melted at 120 degrees, and a pinch of sea salt. Mix at speed level 3 for 5 to 7 minutes until the dough hits a pH of 5.5!",
+            
+            // Riddles
+            "I speak without a mouth and hear without ears. I have no physical body, but I come alive with the wind. I will repeat your words back to you, but I can only say exactly what you have already said. If you whisper, I will whisper. If you shout, I will shout. What am I? I am an echo bouncing off the canyon walls.",
+            "I am always hungry, I must always be fed. The finger I touch, will soon turn red. If you give me water, I will surely die. If you give me wood, I will grow and touch the sky. What am I? I am a crackling fire spreading warmth across the cold winter night.",
+            "I have keys but no doors. I have space but no rooms. You can enter but you can never leave. I am not a house or a building, but I can help you build entire virtual worlds with just a few rapid taps of your nimble fingers. What am I? I am a computer keyboard.",
+            
+            // Tongue Twisters
+            "Bouncing brown bears bravely balanced big blue berries on broad branches, but the big blue berries bounced back and broke the broad branches below.",
+            "Seven shiny ships sailed swiftly past the shimmering silver shores of the shallow sea, seeking shelter before the sudden summer storm started to surge.",
+            "Crazy clacking crabs crawled carefully across the crackling crust of the coral cove, carrying crunchy clams to the clever creatures hiding in the cavern.",
+            "Thirty thirsty thieves thoughtfully threw thick thistles through the thorny thicket, thinking the thick thistles would thwart the threatening trackers trailing them.",
+            "Five frantic frogs frantically fled from the fierce flying falcons in the forest, finding a fine floating fern to function as a fast ferry.",
+            "Great green gorillas gracefully grabbed giant grapes growing in the grand greenhouse, greedily gobbling the giant grapes while glaring at the grumpy guards.",
+            "Peter politely placed plenty of plump purple plums on the pretty porcelain plate, promising to proudly present the plump purple plums to the prince.",
+            "Wandering walruses waddled wildly while whistling windy tunes by the whispering waves, wishing the whispering waves would wash the white winter weather away.",
+            "Daring dragons dramatically dropped dry dirt down the deep dark dungeon drains, driving the dreary dungeon dwellers into a dizzying and dreadful despair.",
+            "Many mumbling monkeys managed to mash mangoes making a massive messy mountain, mixing the mashed mangoes with melted marshmallows for a magnificent meal."
+        ];
+
+        let availableQuotes = [];
+
+        function getRandomText() {
+            if (availableQuotes.length === 0) {
+                availableQuotes = [...quotes];
+                // Fisher-Yates Shuffle
+                for (let i = availableQuotes.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [availableQuotes[i], availableQuotes[j]] = [availableQuotes[j], availableQuotes[i]];
+                }
+            }
+            return availableQuotes.pop();
+        }
+
+        const themes = {
+            neon: { primary: '#00f2ff', primaryBg: 'rgba(0, 242, 255, 0.2)', wrong: '#ff4757', wrongBg: 'rgba(255, 71, 87, 0.4)', bg: '#1a1a2e', container: '#16213e', text: '#e0e0e0', inputBg: 'rgba(15, 52, 96, 0.8)', border: '#333' },
+            classic: { primary: '#2980b9', primaryBg: 'rgba(41, 128, 185, 0.2)', wrong: '#c0392b', wrongBg: 'rgba(192, 57, 43, 0.2)', bg: '#ecf0f1', container: '#ffffff', text: '#2c3e50', inputBg: '#f7f9f9', border: '#bdc3c7' },
+            matrix: { primary: '#00ff00', primaryBg: 'rgba(0, 255, 0, 0.2)', wrong: '#ff0000', wrongBg: 'rgba(255, 0, 0, 0.4)', bg: '#000000', container: '#0d0d0d', text: '#00aa00', inputBg: '#111', border: '#003300' },
+            candy: { primary: '#ff70c6', primaryBg: 'rgba(255, 112, 198, 0.2)', wrong: '#00d2ff', wrongBg: 'rgba(0, 210, 255, 0.2)', bg: '#fff0f5', container: '#ffe4ec', text: '#555', inputBg: '#fffafc', border: '#ffcce6' },
+            dracula: { primary: '#bd93f9', primaryBg: 'rgba(189, 147, 249, 0.2)', wrong: '#ff5555', wrongBg: 'rgba(255, 85, 85, 0.3)', bg: '#282a36', container: '#44475a', text: '#f8f8f2', inputBg: '#6272a4', border: '#6272a4' },
+            oceanic: { primary: '#48cae4', primaryBg: 'rgba(72, 202, 228, 0.2)', wrong: '#e63946', wrongBg: 'rgba(230, 57, 70, 0.3)', bg: '#001219', container: '#005f73', text: '#e0fbfc', inputBg: '#0a9396', border: '#94d2bd' }
+        };
+
+        function applyTheme(themeName) {
+            const t = themes[themeName]; const root = document.documentElement;
+            root.style.setProperty('--primary', t.primary); root.style.setProperty('--primary-bg', t.primaryBg);
+            root.style.setProperty('--wrong', t.wrong); root.style.setProperty('--wrong-bg', t.wrongBg);
+            root.style.setProperty('--bg', t.bg); root.style.setProperty('--container', t.container);
+            root.style.setProperty('--text', t.text); root.style.setProperty('--input-bg', t.inputBg);
+            root.style.setProperty('--border-color', t.border);
+        }
+
+        let sp_cachedSpans = [];
+
+        function toggleMenu() { document.getElementById('sideMenu').classList.toggle('open'); }
+
+        // ==========================================
+        // 1. SINGLE PLAYER LOGIC
+        // ==========================================
+        let sp_timer = null;
+        let sp_timeLeft = 60;
+        let sp_isPlaying = false;
+        let sp_currentText = "";
+        let sp_mistakes = 0;
+
+        const spDisplay = document.getElementById('sp-quoteDisplay');
+        const spInput = document.getElementById('sp-input-field');
+
+        function initSinglePlayer() {
+            sp_currentText = getRandomText();
+            spDisplay.innerHTML = '';
+            sp_cachedSpans = [];
+            
+            sp_currentText.split('').forEach(char => {
+                const span = document.createElement('span');
+                span.textContent = char;
+                spDisplay.appendChild(span);
+                sp_cachedSpans.push(span);
+            });
+            spInput.value = '';
+            if(sp_cachedSpans.length > 0) sp_cachedSpans[0].classList.add('active-char');
+            
+            spInput.removeEventListener('input', handleSpInput);
+            spInput.addEventListener('input', handleSpInput);
+        }
+
+        function scrollTextContainer(container, activeSpan) {
+            if (!activeSpan) return;
+            const containerHalf = container.clientHeight / 2;
+            if (activeSpan.offsetTop > container.scrollTop + containerHalf + 20 || activeSpan.offsetTop < container.scrollTop) {
+                container.scrollTop = activeSpan.offsetTop - containerHalf;
+            }
+        }
+
+        function handleSpInput(e) {
+            const arrayValue = spInput.value.split('');
+            if (!sp_isPlaying && arrayValue.length === 1) {
+                sp_isPlaying = true;
+                sp_timer = setInterval(() => {
+                    sp_timeLeft--;
+                    document.getElementById('sp-timer').innerText = sp_timeLeft;
+                    updateSpStats();
+                    if (sp_timeLeft <= 0) endSingleGame();
+                }, 1000);
+            }
+
+            if (e.inputType === 'insertText' && e.data) {
+                const char = sp_currentText[spInput.value.length - 1];
+                if (char && e.data !== char) sp_mistakes++;
+            }
+
+            let allCorrect = true;
+            
+            sp_cachedSpans.forEach((span, index) => {
+                const char = arrayValue[index];
+                span.className = ''; 
+                if (char == null) allCorrect = false;
+                else if (char === sp_currentText[index]) span.classList.add('correct');
+                else { span.classList.add('incorrect'); allCorrect = false; }
+            });
+
+            const currIdx = arrayValue.length;
+            if (currIdx < sp_cachedSpans.length) {
+                sp_cachedSpans[currIdx].classList.add('active-char');
+                scrollTextContainer(spDisplay, sp_cachedSpans[currIdx]);
+            }
+
+            if (arrayValue.length === sp_currentText.length && allCorrect) endSingleGame();
+        }
+
+        function updateSpStats() {
+            const correct = spDisplay.querySelectorAll('.correct').length;
+            const mins = (60 - sp_timeLeft) / 60;
+            if(mins > 0) document.getElementById('sp-wpm').innerText = Math.round((correct / 5) / mins);
+        }
+
+        function endSingleGame() {
+            clearInterval(sp_timer);
+            sp_isPlaying = false;
+            spInput.disabled = true;
+
+            const correct = spDisplay.querySelectorAll('.correct').length;
+            const time = 60 - sp_timeLeft || 1;
+            const wpm = Math.round((correct / 5) / (time / 60));
+            const acc = (correct + sp_mistakes) > 0 ? Math.round((correct / (correct + sp_mistakes)) * 100) : 0;
+
+            document.getElementById('sp-final-wpm').innerText = wpm;
+            document.getElementById('sp-final-acc').innerText = acc;
+            document.getElementById('sp-total-mistakes').innerText = sp_mistakes;
+            document.getElementById('sp-end-screen').style.display = 'flex';
+        }
+
+        function resetSingleGame() {
+            clearInterval(sp_timer);
+            sp_timeLeft = 60;
+            sp_isPlaying = false;
+            sp_mistakes = 0;
+            document.getElementById('sp-timer').innerText = 60;
+            document.getElementById('sp-wpm').innerText = 0;
+            spInput.disabled = false;
+            document.getElementById('sp-end-screen').style.display = 'none';
+            initSinglePlayer();
+            spDisplay.scrollTop = 0;
+            spInput.focus();
+        }
+
+        initSinglePlayer();
+
+        // ==========================================
+        // 2. MULTIPLAYER LOGIC & OPTIMIZED UPDATES
+        // ==========================================
+        const channel = new BroadcastChannel('typing-race-network');
+        let myId = 'UID_' + Math.floor(1000 + Math.random() * 9000); 
+        let myName = "Player"; 
+        let myRoom = null;
+        let isHost = false;
+        let players = {}; 
+        
+        let mp_isRacing = false;
+        let mp_currentText = "";
+        
+        let mp_timeLeft = 60;
+        let mp_timerInt = null;
+        
+        let mp_cachedSpans = [];
+        let mp_miniSpansCache = {}; 
+
+        document.addEventListener('keydown', (e) => {
+            if (mp_isRacing && !players[myId].finished) {
+                const mpInput = document.getElementById('mp-input-field');
+                if (document.activeElement !== mpInput) {
+                    mpInput.focus();
+                }
+            }
+        });
+
+        function getCustomName(defaultPrefix) {
+            const nameInput = document.getElementById('playerNameInput').value.trim();
+            if (nameInput) return nameInput;
+            return defaultPrefix + '_' + Math.floor(10 + Math.random() * 90);
+        }
+
+        function switchToMultiplayerUI() {
+            clearInterval(sp_timer);
+            document.getElementById('singlePlayerView').style.display = 'none';
+            document.getElementById('multiplayerView').style.display = 'grid'; 
+            document.getElementById('leaveMpBtn').style.display = 'block';
+            document.getElementById('sideMenu').classList.remove('open');
+        }
+
+        function leaveMultiplayer() {
+            myRoom = null;
+            players = {};
+            mp_isRacing = false;
+            if (mp_timerInt) clearInterval(mp_timerInt);
+            
+            document.getElementById('multiplayerView').style.display = 'none';
+            document.getElementById('mpTypingArea').style.display = 'none';
+            document.getElementById('mp-gameOverOverlay').style.display = 'none';
+            document.getElementById('singlePlayerView').style.display = 'block';
+            document.getElementById('leaveMpBtn').style.display = 'none';
+            document.getElementById('hostInfo').style.display = 'none';
+            document.getElementById('sideMenu').classList.remove('open');
+            resetSingleGame(); 
+        }
+
+        function hostGame() {
+            myName = getCustomName("Host");
+            myRoom = Math.floor(1000 + Math.random() * 9000).toString();
+            isHost = true;
+            players = {};
+            players[myId] = { id: myId, name: myName, ready: false, progress: 0, wpm: 0, finished: false, typed: "" };
+            
+            document.getElementById('hostInfo').style.display = 'block';
+            document.getElementById('displayRoomId').innerText = myRoom;
+
+            navigator.clipboard.writeText(myRoom).then(() => {
+                const label = document.getElementById('roomLabel');
+                if(label) {
+                    const originalText = label.innerText;
+                    label.innerText = "Your Room ID (Copied!):";
+                    label.style.color = "var(--primary)";
+                    setTimeout(() => {
+                        label.innerText = originalText;
+                        label.style.color = "#ccc";
+                    }, 3000);
+                }
+            }).catch(err => console.log('Clipboard failed'));
+
+            switchToMultiplayerUI();
+            buildQuadrants();
+        }
+
+        function joinGame() {
+            const roomId = document.getElementById('joinRoomId').value;
+            if (roomId.length === 4) {
+                myName = getCustomName("Player");
+                myRoom = roomId;
+                isHost = false;
+                players = {};
+                players[myId] = { id: myId, name: myName, ready: false, progress: 0, wpm: 0, finished: false, typed: "" };
+                channel.postMessage({ type: 'join_req', room: myRoom, player: players[myId] });
+                switchToMultiplayerUI();
+                buildQuadrants();
+            }
+        }
+
+        channel.onmessage = (e) => {
+            const data = e.data;
+            if (data.room !== myRoom) return; 
+
+            switch(data.type) {
+                case 'join_req':
+                    if (isHost && Object.keys(players).length < 4) {
+                        players[data.player.id] = data.player;
+                        channel.postMessage({ type: 'sync_state', room: myRoom, players: players });
+                        buildQuadrants();
+                    }
+                    break;
+                case 'sync_state':
+                    if (!isHost) { players = data.players; buildQuadrants(); }
+                    break;
+                case 'ready_up':
+                    players[data.pid].ready = data.ready;
+                    buildQuadrants(); 
+                    if (isHost) checkAllReady();
+                    break;
+                case 'start_countdown':
+                    startMpCountdown(data.text);
+                    break;
+                case 'update_progress':
+                    if(players[data.pid]) {
+                        players[data.pid].progress = data.progress;
+                        players[data.pid].wpm = data.wpm;
+                        players[data.pid].typed = data.typed;
+                        updatePlayerDOM(players[data.pid]); 
+                    }
+                    break;
+                case 'time_up':
+                case 'player_finished':
+                    if(players[data.pid]) {
+                        players[data.pid].finished = true;
+                        const readyArea = document.getElementById(`ready-area-${data.pid}`);
+                        if(readyArea) readyArea.innerHTML = '<div class="ready-badge">FINISHED!</div>';
+                        checkMpGameEnd();
+                    }
+                    break;
+            }
+        };
+
+        function toggleReady() {
+            players[myId].ready = !players[myId].ready;
+            channel.postMessage({ type: 'ready_up', room: myRoom, pid: myId, ready: players[myId].ready });
+            buildQuadrants();
+            if(isHost) checkAllReady();
+        }
+
+        function checkAllReady() {
+            const pList = Object.values(players);
+            if (pList.length > 1 && pList.every(p => p.ready)) {
+                const text = getRandomText();
+                channel.postMessage({ type: 'start_countdown', room: myRoom, text: text });
+                startMpCountdown(text);
+            }
+        }
+
+        function buildQuadrants() {
+            const container = document.getElementById('multiplayerView');
+            container.innerHTML = '';
+            mp_miniSpansCache = {}; 
+            
+            const pList = Object.values(players);
+            const canStartRace = pList.length > 1; 
+
+            container.className = 'quadrants-container grid-' + pList.length;
+
+            for (let i = 0; i < pList.length; i++) {
+                const p = pList[i];
+                const quad = document.createElement('div');
+                quad.className = 'quadrant';
+                
+                const isMe = p.id === myId;
+                quad.style.borderColor = isMe ? 'var(--primary)' : 'var(--border-color)';
+                
+                let readyHtml = '';
+                if (!mp_isRacing) {
+                    if (isMe) {
+                        if (!canStartRace) readyHtml = `<button class="btn ready-btn" disabled>Waiting for players...</button>`;
+                        else readyHtml = `<button class="btn ready-btn" onclick="toggleReady()">${p.ready ? 'Ready!' : 'Click to Ready'}</button>`;
+                    } else {
+                        readyHtml = `<div class="ready-badge" style="color: ${p.ready ? '#2ecc71' : '#777'}">${p.ready ? 'READY' : 'Waiting...'}</div>`;
+                    }
+                } else if (p.finished) {
+                    readyHtml = '<div class="ready-badge">FINISHED!</div>';
+                }
+
+                quad.innerHTML = `
+                    <div class="quad-header">
+                        <div class="quad-name">${isMe ? 'You ('+p.name+')' : p.name}</div>
+                        <div class="quad-wpm" id="wpm-${p.id}">${p.wpm} WPM</div>
+                    </div>
+                    <div class="progress-track"><div class="progress-fill" id="prog-${p.id}" style="width: ${p.progress}%"></div></div>
+                    <div class="mini-quote-display" id="mini-display-${p.id}"></div>
+                    <div id="ready-area-${p.id}">${readyHtml}</div>
+                `;
+                
+                container.appendChild(quad);
+            }
+
+            if(mp_isRacing) populateMiniDisplays();
+        }
+
+        function startMpCountdown(text) {
+            mp_currentText = text;
+            const overlay = document.getElementById('mp-countdownOverlay');
+            const timerEl = document.getElementById('mp-countdownTimer');
+            overlay.style.display = 'flex';
+            
+            let count = 3;
+            timerEl.innerText = count;
+            
+            const int = setInterval(() => {
+                count--;
+                if (count > 0) timerEl.innerText = count;
+                else if (count === 0) timerEl.innerText = "GO!";
+                else {
+                    clearInterval(int);
+                    overlay.style.display = 'none';
+                    beginMpRace();
+                }
+            }, 1000);
+        }
+
+        function beginMpRace() {
+            mp_isRacing = true;
+            mp_timeLeft = 60; 
+            
+            buildQuadrants(); 
+            populateMiniDisplays();
+
+            document.getElementById('mpTypingArea').style.display = 'flex'; 
+            
+            const display = document.getElementById('mp-quoteDisplay');
+            const input = document.getElementById('mp-input-field');
+            const timerText = document.getElementById('mp-live-timer-text');
+            const timerBar = document.getElementById('mp-time-bar');
+            
+            display.innerHTML = '';
+            mp_cachedSpans = [];
+            mp_currentText.split('').forEach(char => {
+                const span = document.createElement('span');
+                span.textContent = char;
+                display.appendChild(span);
+                mp_cachedSpans.push(span);
+            });
+            
+            input.value = '';
+            input.disabled = false;
+            
+            setTimeout(() => {
+                input.focus();
+            }, 10);
+            
+            mp_cachedSpans[0].classList.add('active-char');
+            
+            input.removeEventListener('input', handleMpType);
+            input.addEventListener('input', handleMpType);
+
+            timerText.innerText = "60s";
+            timerBar.style.width = "100%";
+
+            if (mp_timerInt) clearInterval(mp_timerInt);
+            mp_timerInt = setInterval(() => {
+                mp_timeLeft--;
+                
+                timerText.innerText = mp_timeLeft + "s";
+                timerBar.style.width = ((mp_timeLeft / 60) * 100) + "%";
+
+                if (mp_timeLeft <= 0) {
+                    clearInterval(mp_timerInt);
+                    input.disabled = true;
+                    players[myId].finished = true;
+                    channel.postMessage({ type: 'time_up', room: myRoom, pid: myId });
+                    checkMpGameEnd();
+                }
+            }, 1000);
+        }
+
+        function populateMiniDisplays() {
+            Object.values(players).forEach(p => {
+                const mini = document.getElementById(`mini-display-${p.id}`);
+                const readyArea = document.getElementById(`ready-area-${p.id}`);
+                if (mini) {
+                    mini.innerHTML = '';
+                    mp_miniSpansCache[p.id] = [];
+                    mp_currentText.split('').forEach(char => {
+                        const span = document.createElement('span');
+                        span.textContent = char;
+                        mini.appendChild(span);
+                        mp_miniSpansCache[p.id].push(span);
+                    });
+                    mini.style.display = 'block';
+                    if(readyArea) readyArea.style.display = 'none';
+                }
+            });
+        }
+
+        function updatePlayerDOM(p) {
+            const wpmEl = document.getElementById(`wpm-${p.id}`);
+            const progEl = document.getElementById(`prog-${p.id}`);
+            if (wpmEl) wpmEl.innerText = `${p.wpm} WPM`;
+            if (progEl) progEl.style.width = `${p.progress}%`;
+
+            const mini = document.getElementById(`mini-display-${p.id}`);
+            const cachedSpans = mp_miniSpansCache[p.id];
+            
+            if (!mini || !cachedSpans) return;
+            
+            const arrayValue = (p.typed || "").split('');
+            
+            cachedSpans.forEach((span, index) => {
+                const char = arrayValue[index];
+                span.className = ''; 
+                
+                if (char != null) {
+                    if (char === mp_currentText[index]) span.classList.add('correct');
+                    else span.classList.add('incorrect');
+                }
+            });
+
+            const currIdx = arrayValue.length;
+            if (currIdx < cachedSpans.length) {
+                cachedSpans[currIdx].classList.add('active-char');
+                scrollTextContainer(mini, cachedSpans[currIdx]);
+            }
+        }
+
+        function handleMpType() {
+            if(mp_timeLeft <= 0) return; 
+
+            const input = document.getElementById('mp-input-field');
+            const arrayValue = input.value.split('');
+            
+            let correctChars = 0;
+            let allCorrect = true;
+
+            mp_cachedSpans.forEach((span, index) => {
+                const char = arrayValue[index];
+                span.className = ''; 
+                
+                if (char == null) allCorrect = false;
+                else if (char === mp_currentText[index]) { span.classList.add('correct'); correctChars++; }
+                else { span.classList.add('incorrect'); allCorrect = false; }
+            });
+
+            const currIdx = arrayValue.length;
+            if (currIdx < mp_cachedSpans.length) {
+                mp_cachedSpans[currIdx].classList.add('active-char');
+                scrollTextContainer(document.getElementById('mp-quoteDisplay'), mp_cachedSpans[currIdx]);
+            }
+
+            const progress = (arrayValue.length / mp_currentText.length) * 100;
+            
+            let mins = (60 - mp_timeLeft) / 60;
+            if (mins <= 0) mins = 0.01; 
+            const wpm = Math.round((correctChars / 5) / mins);
+
+            players[myId].progress = progress;
+            players[myId].wpm = wpm;
+            players[myId].typed = input.value;
+            
+            channel.postMessage({ type: 'update_progress', room: myRoom, pid: myId, progress, wpm, typed: input.value });
+            updatePlayerDOM(players[myId]);
+
+            if (arrayValue.length === mp_currentText.length && allCorrect) {
+                input.disabled = true;
+                players[myId].finished = true;
+                
+                const readyArea = document.getElementById(`ready-area-${myId}`);
+                if (readyArea) {
+                    readyArea.innerHTML = '<div class="ready-badge">FINISHED!</div>';
+                    readyArea.style.display = 'block';
+                }
+                
+                channel.postMessage({ type: 'player_finished', room: myRoom, pid: myId });
+                checkMpGameEnd();
+            }
+        }
+
+        function checkMpGameEnd() {
+            const pList = Object.values(players);
+            
+            if (players[myId].finished || mp_timeLeft <= 0) {
+                if (mp_timerInt) clearInterval(mp_timerInt);
+                document.getElementById('mp-input-field').disabled = true;
+
+                document.getElementById('mp-gameOverOverlay').style.display = 'flex';
+                let maxWPM = -1; let winnerName = ""; let winnerId = "";
+                
+                pList.forEach(p => { 
+                    if(p.wpm > maxWPM) { 
+                        maxWPM = p.wpm; 
+                        winnerName = p.name; 
+                        winnerId = p.id;
+                    } 
+                });
+                
+                const msg = winnerId === myId ? "You Won! 🏆" : winnerName + " Won!";
+                document.getElementById('mp-winnerText').innerText = msg;
+            }
+        }
+    </script>
+</body>
+</html>
